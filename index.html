@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Учёт выплат по лимитам</title>
+<style>
+*{box-sizing:border-box}
+:root{--accent:#FFC400;--accent-d:#E6B000;--text:#1d1d1f;--muted:#6b7280;--line:#e5e7eb;--green:#22a559;--yellow:#f2b705;--red:#e03131}
+body{margin:0;background:#fff;color:var(--text);font:16px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:20px}
+.app{display:grid;grid-template-columns:320px 1fr;gap:24px;max-width:1100px;margin:0 auto;padding:20px}
+.left{display:flex;flex-direction:column;gap:10px;align-self:start}
+.left .sep{height:1px;background:var(--line);margin:6px 0}
+button{font:inherit;cursor:pointer;border-radius:10px;padding:12px 14px;border:1px solid var(--line);background:#fff;color:var(--text);text-align:left}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.accent{background:var(--accent);border-color:var(--accent);font-weight:600}
+button.accent:hover:not(:disabled){background:var(--accent-d)}
+button.plain:hover:not(:disabled){background:#f6f6f7}
+.right{min-width:0}
+.who{font-size:22px;font-weight:700;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:14px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.card{border:1px solid var(--line);border-radius:12px;padding:14px}
+.card .l{color:var(--muted);font-size:13px}
+.card .v{font-size:20px;font-weight:700;margin-top:4px;word-break:break-word}
+.card .v.neg{color:var(--red)}
+.scale{height:18px;background:#eef0f2;border-radius:9px;overflow:hidden}
+.bar{height:100%;width:0;background:var(--green);transition:width .3s,background .3s}
+.bar.g{background:var(--green)}.bar.y{background:var(--yellow)}.bar.r{background:var(--red)}
+.pct{display:flex;justify-content:space-between;margin-top:6px;font-size:14px;color:var(--muted)}
+.pct b{color:var(--text)}
+.warn{margin-top:14px;padding:12px 14px;border-radius:10px;font-weight:600;display:none}
+.warn.y{display:block;background:#fff6d6;color:#7a5b00;border:1px solid #f2d36b}
+.warn.r{display:block;background:#ffe3e3;color:#a61e1e;border:1px solid #f5a3a3}
+h3{margin:24px 0 8px;font-size:16px}
+.hist{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px}
+.hist li{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;justify-content:space-between;align-items:flex-start}
+.hist li:last-child{border-bottom:0}
+.hist .main{min-width:0}
+.hist .t{font-weight:600}
+.hist .d{color:var(--muted);font-size:13px;word-break:break-word}
+.hist .amt{font-weight:700;white-space:nowrap}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:20px;background:#eef0f2;color:var(--muted);margin-left:6px;font-weight:500}
+.hist li.off .amt,.hist li.off .t{color:var(--muted);text-decoration:line-through}
+.hist li.ev{background:#fafafa}
+.empty{color:var(--muted);padding:14px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+#modal.open{display:flex}
+.box{background:#fff;border-radius:14px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow:auto}
+.box h2{margin:0 0 14px;font-size:18px}
+label{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
+input,select{width:100%;font:inherit;padding:10px 12px;border:1px solid #cfd4da;border-radius:10px;background:#fff}
+input:focus,select:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+.hint{font-size:13px;color:var(--muted);margin-top:6px}
+.err{color:var(--red);font-size:14px;margin-top:10px;min-height:1em}
+.row{display:flex;gap:10px;margin-top:14px}
+.row button{flex:1;text-align:center}
+.pick{display:flex;flex-direction:column;gap:8px}
+.pick button small{display:block;color:var(--muted);font-weight:400}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;display:none;z-index:20;max-width:90vw}
+@media(max-width:760px){
+.app{grid-template-columns:1fr;gap:16px;padding:14px}
+.left{display:grid;grid-template-columns:1fr 1fr}
+.left .sep{display:none}
+.cards{grid-template-columns:1fr}
+.card{display:flex;justify-content:space-between;align-items:center}
+.card .v{margin:0;font-size:18px;text-align:right}
+}
+</style>
+</head>
+<body>
+<header><h1>Учёт выплат по лимитам</h1></header>
+<div class="app">
+  <div class="left">
+    <button class="accent" id="bAdd">Добавить получателя</button>
+    <button class="accent" id="bPick">Выбрать получателя</button>
+    <button class="accent" id="bLimit">Установить лимит</button>
+    <button class="accent" id="bPay">Выплата</button>
+    <div class="sep"></div>
+    <button class="plain" id="bReset">Сбросить</button>
+    <button class="plain" id="bDel">Удалить получателя</button>
+  </div>
+  <div class="right">
+    <div class="who" id="who"></div>
+    <div class="sub" id="sub"></div>
+    <div class="cards">
+      <div class="card"><div class="l">Сумма</div><div class="v" id="vSum">—</div></div>
+      <div class="card"><div class="l">Лимит</div><div class="v" id="vLim">—</div></div>
+      <div class="card"><div class="l">Остаток</div><div class="v" id="vRest">—</div></div>
+    </div>
+    <div class="scale"><div class="bar" id="bar"></div></div>
+    <div class="pct"><span>Использовано лимита</span><b id="pct">—</b></div>
+    <div class="warn" id="warn"></div>
+    <h3>История</h3>
+    <ul class="hist" id="hist"></ul>
+  </div>
+</div>
+<div id="modal"></div>
+<div id="toast"></div>
+<script>
+const KEY='payout_limits_v1';
+let state=load();
+const $=s=>document.querySelector(s);
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.recipients))return s}catch(e){}return{recipients:[],currentId:null}}
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const pad=n=>String(n).padStart(2,'0');
+const rub=n=>new Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'}).format(n);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function today(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function fmtDate(iso){const p=iso.split('-');return p[2]+'.'+p[1]+'.'+p[0]}
+function fmtTs(ts){const d=new Date(ts);return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
+function parseMoney(s){s=String(s).replace(/\s/g,'').replace(',','.');if(!/^\d+(\.\d{1,2})?$/.test(s))return null;return Math.round(parseFloat(s)*100)/100}
+const fullName=r=>[r.last,r.first,r.middle].join(' ');
+const cur=()=>state.recipients.find(r=>r.id===state.currentId)||null;
+
+/* ---------- период лимита ---------- */
+const PERIODS={none:'Без периода',month:'Месяц',year:'Год'};
+function periodKey(p){if(p==='month')return today().slice(0,7);if(p==='year')return today().slice(0,4);return null}
+function periodLabel(r){
+  const k=periodKey(r.period);if(!k)return '';
+  if(r.period==='month'){const[y,m]=k.split('-');const d=new Date(+y,+m-1,1);return d.toLocaleDateString('ru-RU',{month:'long',year:'numeric'})}
+  return k+' год';
+}
+function nextResetLabel(r){
+  const k=periodKey(r.period);if(!k)return '';
+  if(r.period==='month'){const[y,m]=k.split('-').map(Number);const d=new Date(y,m,1);return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()}
+  return '01.01.'+(+k+1);
+}
+function counted(r,p){
+  if(p.resetAt)return false;
+  const k=periodKey(r.period);
+  return !k||p.date.startsWith(k);
+}
+function total(r){
+  let s=0;
+  r.history.forEach(h=>{if(h.type==='payment'&&counted(r,h))s+=h.amount});
+  return Math.round(s*100)/100;
+}
+/* автосброс при смене периода */
+function checkPeriods(){
+  let changed=false;
+  state.recipients.forEach(r=>{
+    const k=periodKey(r.period);
+    if(!k){if(r.periodKey){r.periodKey=null;changed=true}return}
+    if(!r.periodKey){r.periodKey=k;changed=true;return}
+    if(r.periodKey!==k){
+      const ts=Date.now();let sum=0,n=0;
+      r.history.forEach(h=>{if(h.type==='payment'&&!h.resetAt){h.resetAt=ts;h.resetReason='auto';sum+=h.amount;n++}});
+      if(n)r.history.push({type:'reset',reason:'auto',amount:Math.round(sum*100)/100,ts,note:'Новый период: '+periodLabel(r)});
+      r.periodKey=k;changed=true;
+    }
+  });
+  if(changed){save();render()}
+}
+
+/* ---------- отрисовка ---------- */
+function render(){
+  const r=cur();
+  const has=!!r;
+  ['bLimit','bPay','bReset','bDel'].forEach(id=>$('#'+id).disabled=!has);
+  $('#bPick').disabled=!state.recipients.length;
+  const warn=$('#warn'),bar=$('#bar');
+  warn.className='warn';warn.textContent='';
+  if(!has){
+    $('#who').textContent='Получатель не выбран';
+    $('#sub').textContent=state.recipients.length?'Нажмите «Выбрать получателя».':'Нажмите «Добавить получателя».';
+    ['vSum','vLim','vRest'].forEach(id=>{$('#'+id).textContent='—';$('#'+id).classList.remove('neg')});
+    bar.style.width='0';bar.className='bar';$('#pct').textContent='—';
+    $('#hist').innerHTML='<li class="empty">Нет данных</li>';
+    return;
+  }
+  const sum=total(r);
+  $('#who').textContent=fullName(r);
+  let sub='';
+  if(r.limit!=null){
+    sub=r.period!=='none'?'Период лимита: '+PERIODS[r.period].toLowerCase()+' ('+periodLabel(r)+'). Автосброс счёта: '+nextResetLabel(r):'Лимит без периода';
+  }else sub='Лимит не установлен';
+  $('#sub').textContent=sub;
+  $('#vSum').textContent=rub(sum);
+  const rest=$('#vRest');rest.classList.remove('neg');
+  if(r.limit!=null){
+    $('#vLim').textContent=rub(r.limit);
+    const left=Math.round((r.limit-sum)*100)/100;
+    rest.textContent=rub(left);if(left<0)rest.classList.add('neg');
+    const pct=r.limit>0?sum/r.limit*100:(sum>0?100:0);
+    bar.style.width=Math.min(pct,100)+'%';
+    bar.className='bar '+(pct>=100?'r':pct>80?'y':'g');
+    $('#pct').textContent=(Math.round(pct*10)/10).toString().replace('.',',')+'%';
+    if(pct>=100){warn.className='warn r';warn.textContent=left<0?'Лимит исчерпан. Превышение: '+rub(-left):'Лимит исчерпан полностью.'}
+    else if(pct>80){warn.className='warn y';warn.textContent='Внимание: лимит почти исчерпан. Остаток: '+rub(left)}
+  }else{
+    $('#vLim').textContent='—';rest.textContent='—';
+    bar.style.width='0';bar.className='bar';$('#pct').textContent='—';
+  }
+  renderHistory(r);
+}
+function renderHistory(r){
+  const ul=$('#hist');
+  if(!r.history.length){ul.innerHTML='<li class="empty">История пуста</li>';return}
+  ul.innerHTML=r.history.slice().sort((a,b)=>b.ts-a.ts).map(h=>{
+    if(h.type==='payment'){
+      let tags='';
+      if(h.resetAt)tags='<span class="tag">сброшена'+(h.resetReason==='auto'?' (авто)':'')+'</span>';
+      else if(!counted(r,h))tags='<span class="tag">вне текущего периода</span>';
+      const off=!counted(r,h)?' off':'';
+      return '<li class="'+off.trim()+'"><div class="main"><div class="t">Выплата'+tags+'</div><div class="d">'+fmtDate(h.date)+(h.purpose?' · '+esc(h.purpose):'')+'</div></div><div class="amt">'+rub(h.amount)+'</div></li>';
+    }
+    if(h.type==='limit'){
+      const txt=h.amount==null?'Лимит снят':'Лимит: '+rub(h.amount)+(h.period&&h.period!=='none'?' · период: '+PERIODS[h.period].toLowerCase():' · без периода');
+      return '<li class="ev"><div class="main"><div class="t">'+txt+'</div><div class="d">'+fmtTs(h.ts)+'</div></div></li>';
+    }
+    return '<li class="ev"><div class="main"><div class="t">Сброс счёта'+(h.reason==='auto'?' (автоматически)':'')+'</div><div class="d">'+fmtTs(h.ts)+(h.note?' · '+esc(h.note):'')+(h.amount?' · обнулено '+rub(h.amount):'')+'</div></div></li>';
+  }).join('');
+}
+
+/* ---------- модальные окна ---------- */
+function openModal(title,html){
+  const m=$('#modal');
+  m.innerHTML='<div class="box" role="dialog" aria-modal="true"><h2>'+title+'</h2>'+html+'</div>';
+  m.classList.add('open');
+  const f=m.querySelector('input,select');if(f)f.focus();
+  return m.querySelector('.box');
+}
+function closeModal(){const m=$('#modal');m.classList.remove('open');m.innerHTML=''}
+$('#modal').addEventListener('mousedown',e=>{if(e.target.id==='modal')closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',4000)}
+const btns='<div class="row"><button type="button" class="plain" data-c>Отмена</button><button type="submit" class="accent">Сохранить</button></div>';
+
+$('#bAdd').onclick=()=>{
+  const b=openModal('Новый получатель',
+   '<form><label>Фамилия *</label><input name="l" autocomplete="off"><label>Имя *</label><input name="f" autocomplete="off"><label>Отчество *</label><input name="m" autocomplete="off"><div class="err"></div>'+btns+'</form>');
+  b.querySelector('[data-c]').onclick=closeModal;
+  b.querySelector('form').onsubmit=e=>{
+    e.preventDefault();const f=e.target;
+    const l=f.l.value.trim(),n=f.f.value.trim(),m=f.m.value.trim();
+    if(!l||!n||!m){b.querySelector('.err').textContent='Заполните фамилию, имя и отчество.';return}
+    const r={id:uid(),last:l,first:n,middle:m,limit:null,period:'none',periodKey:null,history:[]};
+    state.recipients.push(r);state.currentId=r.id;save();closeModal();render();
+  };
+};
+$('#bPick').onclick=()=>{
+  if(!state.recipients.length)return;
+  const list=state.recipients.slice().sort((a,b)=>fullName(a).localeCompare(fullName(b),'ru'));
+  const b=openModal('Выбрать получателя','<div class="pick">'+list.map(r=>{
+    const s=total(r);
+    const info=r.limit!=null?rub(s)+' из '+rub(r.limit):'Лимит не установлен';
+    return '<button type="button" class="plain" data-id="'+r.id+'">'+esc(fullName(r))+'<small>'+info+'</small></button>';
+  }).join('')+'</div><div class="row"><button type="button" class="plain" data-c>Закрыть</button></div>');
+  b.querySelector('[data-c]').onclick=closeModal;
+  b.querySelectorAll('[data-id]').forEach(x=>x.onclick=()=>{state.currentId=x.dataset.id;save();closeModal();render()});
+};
+$('#bLimit').onclick=()=>{
+  const r=cur();if(!r)return;
+  const b=openModal('Лимит: '+esc(fullName(r)),
+   '<form><label>Сумма лимита, ₽ (пусто — без лимита)</label><input name="a" inputmode="decimal" placeholder="Например, 100 000" autocomplete="off" value="'+(r.limit!=null?String(r.limit).replace('.',','):'')+'">'+
+   '<label>Период лимита</label><select name="p"><option value="none">Без периода</option><option value="month">Месяц</option><option value="year">Год</option></select>'+
+   '<div class="hint">При выборе месяца или года счёт обнуляется автоматически в начале нового периода (1-го числа месяца или 1 января). Учитываются выплаты с датой в текущем периоде.</div>'+
+   '<div class="err"></div>'+btns+'</form>');
+  b.querySelector('select').value=r.period||'none';
+  b.querySelector('[data-c]').onclick=closeModal;
+  b.querySelector('form').onsubmit=e=>{
+    e.preventDefault();const f=e.target;const raw=f.a.value.trim();
+    let val=null;
+    if(raw!==''){val=parseMoney(raw);if(val===null||val<=0){b.querySelector('.err').textContent='Введите сумму в рублях, например 15000 или 15000,50.';return}}
+    r.limit=val;
+    r.period=val==null?'none':f.p.value;
+    r.periodKey=periodKey(r.period);
+    r.history.push({type:'limit',amount:val,period:r.period,ts:Date.now()});
+    save();closeModal();render();
+  };
+};
+$('#bPay').onclick=()=>{
+  const r=cur();if(!r)return;
+  const b=openModal('Выплата: '+esc(fullName(r)),
+   '<form><label>Сумма, ₽ *</label><input name="a" inputmode="decimal" placeholder="0,00" autocomplete="off">'+
+   '<label>Дата *</label><input name="d" type="date" value="'+today()+'">'+
+   '<label>Назначение платежа</label><input name="p" autocomplete="off"><div class="err"></div>'+btns+'</form>');
+  b.querySelector('[data-c]').onclick=closeModal;
+  b.querySelector('form').onsubmit=e=>{
+    e.preventDefault();const f=e.target;
+    const a=parseMoney(f.a.value);
+    if(a===null||a<=0){b.querySelector('.err').textContent='Введите сумму больше нуля, например 5000 или 5000,50.';return}
+    if(!f.d.value){b.querySelector('.err').textContent='Укажите дату.';return}
+    const p={type:'payment',id:uid(),amount:a,date:f.d.value,purpose:f.p.value.trim(),ts:Date.now(),resetAt:null};
+    r.history.push(p);save();closeModal();render();
+    if(!counted(r,p))toast('Дата выплаты вне текущего периода — в счёт не входит.');
+    else if(r.limit!=null){
+      const pct=total(r)/r.limit*100;
+      if(pct>=100)toast('Лимит исчерпан!');else if(pct>80)toast('Внимание: лимит почти исчерпан');
+    }
+  };
+};
+$('#bReset').onclick=()=>{
+  const r=cur();if(!r)return;
+  const ts=Date.now();let sum=0;
+  r.history.forEach(h=>{if(h.type==='payment'&&!h.resetAt){h.resetAt=ts;h.resetReason='manual';if(counted({period:'none'},h))sum+=h.amount}});
+  r.history.push({type:'reset',reason:'manual',amount:Math.round(sum*100)/100,ts});
+  save();render();
+};
+$('#bDel').onclick=()=>{
+  const r=cur();if(!r)return;
+  state.recipients=state.recipients.filter(x=>x.id!==r.id);
+  state.currentId=null;save();render();
+};
+checkPeriods();
+render();
+setInterval(checkPeriods,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkPeriods()});
+</script>
+</body>
+</html>
